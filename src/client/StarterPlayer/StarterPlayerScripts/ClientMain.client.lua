@@ -1,12 +1,16 @@
 -- src/client/StarterPlayer/StarterPlayerScripts/ClientMain.client.lua
--- Контроллер + камера, следующая за собакой
+-- Контроллер (клавиатура ИЛИ мобильный джойстик) + камера-следование
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
-print("🎮 Клиент подключился!")
+
+-- Если есть клавиатура - наш контроллер. Если нет - стандартный джойстик Roblox.
+local useKeyboard = UserInputService.KeyboardEnabled
+
+print("🎮 Клиент подключился! Клавиатура: " .. tostring(useKeyboard))
 
 local function bindCharacter(character)
     local humanoid = character:WaitForChild("Humanoid")
@@ -21,31 +25,33 @@ local function bindCharacter(character)
             conn:Disconnect()
             return
         end
-        if UserInputService:GetFocusedTextBox() then return end
 
-        -- Движение (WASD относительно камеры)
-        local look = camera.CFrame.LookVector
-        local right = camera.CFrame.RightVector
-        look = Vector3.new(look.X, 0, look.Z)
-        right = Vector3.new(right.X, 0, right.Z)
-        if look.Magnitude > 0.01 then look = look.Unit end
-        if right.Magnitude > 0.01 then right = right.Unit end
+        -- ДВИЖЕНИЕ: только для клавиатуры.
+        -- На мобильных не трогаем humanoid - там работает джойстик Roblox.
+        if useKeyboard then
+            if UserInputService:GetFocusedTextBox() then return end
 
-        local move = Vector3.new(0, 0, 0)
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then move = move + look end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then move = move - look end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then move = move + right end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then move = move - right end
+            local look = camera.CFrame.LookVector
+            local right = camera.CFrame.RightVector
+            look = Vector3.new(look.X, 0, look.Z)
+            right = Vector3.new(right.X, 0, right.Z)
+            if look.Magnitude > 0.01 then look = look.Unit end
+            if right.Magnitude > 0.01 then right = right.Unit end
 
-        -- ВАЖНО: вызываем ВСЕГДА, даже с нулем.
-        -- Это глушит любое фантомное движение без клавиш.
-        humanoid:Move(move)
+            local move = Vector3.new(0, 0, 0)
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then move = move + look end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then move = move - look end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then move = move + right end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then move = move - right end
 
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            humanoid.Jump = true
+            humanoid:Move(move)
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                humanoid.Jump = true
+            end
         end
 
-        -- Камера: первый кадр - мгновенно за собакой, дальше - плавно
+        -- КАМЕРА: работает везде (ПК и мобильные)
         local desired = root.CFrame * CFrame.new(0, 4.5, 11)
         if first then
             camera.CFrame = desired
