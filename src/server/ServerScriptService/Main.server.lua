@@ -5,14 +5,12 @@ local RunService = game:GetService("RunService")
 
 local SPAWN_POINT = CFrame.new(0, 6, 0)
 
--- Убираем только стандартную точку спавна (пол оставляем как страховку)
 for _, child in pairs(workspace:GetChildren()) do
     if child:IsA("SpawnLocation") then
         child:Destroy()
     end
 end
 
--- Функция создания модели собаки
 local function createDogModel()
     local dog = Instance.new("Model")
     dog.Name = "DogModel"
@@ -106,13 +104,11 @@ local function createDogModel()
     return dog, body, anim
 end
 
--- Применение собаки к персонажу
 local function applyToCharacter(character)
     if character:FindFirstChild("DogModel") then return end
     local humanoid = character:WaitForChild("Humanoid")
     local rootPart = character:WaitForChild("HumanoidRootPart")
 
-    -- Скрываем стандартного персонажа
     for _, part in pairs(character:GetDescendants()) do
         if part:IsA("BasePart") then
             part.Transparency = 1
@@ -122,10 +118,9 @@ local function applyToCharacter(character)
         end
     end
     humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-    humanoid.WalkSpeed = 16
+    humanoid.WalkSpeed = 20
     humanoid.JumpPower = 50
 
-    -- Создаем и привязываем собаку
     local dogModel, dogBody, anim = createDogModel()
     dogModel.Parent = character
 
@@ -135,16 +130,24 @@ local function applyToCharacter(character)
     weld.C0 = CFrame.new(0, -2, 0)
     weld.Parent = rootPart
 
-    -- Анимация + спасение от падения
     local conn
-    conn = RunService.Heartbeat:Connect(function()
+    local dbg = 0
+    conn = RunService.Heartbeat:Connect(function(dt)
         if not character.Parent then
             conn:Disconnect()
             return
         end
 
-        -- Если упали ниже платформы - телепорт на спавн
-        if rootPart.Position.Y < 2.5 then
+        -- Отладка: раз в секунду печатаем состояние движения
+        dbg = dbg + dt
+        if dbg >= 1 then
+            dbg = 0
+            print(string.format("DBG move=%.2f Y=%.2f speed=%d",
+                humanoid.MoveDirection.Magnitude, rootPart.Position.Y, humanoid.WalkSpeed))
+        end
+
+        -- Спасение от падения (порог поднят до 3.2)
+        if rootPart.Position.Y < 3.2 then
             rootPart.CFrame = SPAWN_POINT
         end
 
@@ -165,13 +168,11 @@ end
 
 local function setupPlayer(player)
     player.CharacterAdded:Connect(applyToCharacter)
-    -- Если персонаж уже есть (защита от гонки событий)
     if player.Character then
         applyToCharacter(player.Character)
     end
 end
 
--- Зона спавна (платформа-остров выше серой базы)
 local function createSpawnZone()
     local spawnZone = Instance.new("Model")
     spawnZone.Name = "SpawnZone"
