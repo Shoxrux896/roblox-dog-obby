@@ -1,104 +1,95 @@
 -- src/server/ServerScriptService/Sounds.server.lua
--- Звуки: лай, прыжок, подбор, чекпоинт, победа
+-- Звуки: лай, подбор, чекпоинт, победа
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- 🔊 ЕСЛИ КАКОЙ-ТО ЗВУК НЕ ИГРАЕТ: замени цифры после rbxassetid://
 local SOUNDS = {
-    Bark = "rbxassetid://5302725289",       -- лай собаки (клавиша F)
-    Collect = "rbxassetid://5869584231",    -- подбор косточки
-    Checkpoint = "rbxassetid://1476623440", -- чекпоинт
-    Win = "rbxassetid://4639854424",        -- победа
-    Jump = "rbxasset://sounds/action_jump.mp3", -- прыжок (встроенный)
+    Bark = "rbxassetid://5302725289",
+    Collect = "rbxassetid://130762736",
 }
 
 local barkEvent = Instance.new("RemoteEvent")
 barkEvent.Name = "BarkEvent"
 barkEvent.Parent = ReplicatedStorage
 
-local lastJump = {}
-local lastBark = {}
-local joinTime = {}
-
-local function playAt(character, id, volume)
+local function playSoundAt(character, id, speed, volume)
     local root = character and character:FindFirstChild("HumanoidRootPart")
     if not root then return end
-    local sound = Instance.new("Sound")
-    sound.SoundId = id
-    sound.Volume = volume or 0.5
-    sound.Parent = root
-    sound:Play()
-    task.delay(4, function()
-        sound:Destroy()
+    local s = Instance.new("Sound")
+    s.SoundId = id
+    s.PlaybackSpeed = speed or 1
+    s.Volume = volume or 0.7
+    s.Parent = root
+    s:Play()
+    task.delay(3, function()
+        s:Destroy()
     end)
 end
 
-local function hookLeaderstats(player, ls)
-    local bones = ls:WaitForChild("Bones", 10)
-    local stage = ls:WaitForChild("Stage", 10)
-    local last = {bones = bones.Value, stage = stage.Value}
-
-    bones.Changed:Connect(function(v)
-        local fresh = (os.clock() - joinTime[player.UserId]) < 2
-        if v > last.bones and not fresh then
-            playAt(player.Character, SOUNDS.Collect, 0.6)
-        end
-        last.bones = v
-    end)
-
-    stage.Changed:Connect(function(v)
-        local fresh = (os.clock() - joinTime[player.UserId]) < 2
-        if v > last.stage and not fresh then
-            if v == 99 then
-                playAt(player.Character, SOUNDS.Win, 0.8)
-            else
-                playAt(player.Character, SOUNDS.Checkpoint, 0.6)
-            end
-        end
-        last.stage = v
+local function showBarkBubble(character)
+    if not character then return end
+    local dog = character:FindFirstChild("DogModel")
+    local head = (dog and dog:FindFirstChild("Head")) or character:FindFirstChild("HumanoidRootPart")
+    local bill = Instance.new("BillboardGui")
+    bill.Size = UDim2.fromOffset(120, 50)
+    bill.StudsOffset = Vector3.new(0, 3, 0)
+    bill.Adornee = head
+    bill.AlwaysOnTop = true
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "Гав! 🐶"
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextStrokeTransparency = 0.3
+    label.TextScaled = true
+    label.Parent = bill
+    bill.Parent = character
+    task.delay(0.9, function()
+        bill:Destroy()
     end)
 end
 
-local function hookPlayer(player)
-    joinTime[player.UserId] = os.clock()
-
-    player.CharacterAdded:Connect(function(character)
-        local humanoid = character:WaitForChild("Humanoid")
-        humanoid.Jumping:Connect(function()
-            local now = os.clock()
-            if now - (lastJump[player.UserId] or 0) > 0.6 then
-                lastJump[player.UserId] = now
-                playAt(character, SOUNDS.Jump, 0.4)
-            end
-        end)
-    end)
-
-    local ls = player:FindFirstChild("leaderstats")
-    if ls then
-        hookLeaderstats(player, ls)
-    else
-        player.ChildAdded:Connect(function(child)
-            if child.Name == "leaderstats" then
-                hookLeaderstats(player, child)
-            end
-        end)
-    end
-end
-
--- Лай по нажатию F (клиент шлет сигнал сюда)
 barkEvent.OnServerEvent:Connect(function(player)
-    local now = os.clock()
-    if now - (lastBark[player.UserId] or 0) > 0.5 then
-        lastBark[player.UserId] = now
-        playAt(player.Character, SOUNDS.Bark, 0.8)
-        print("🐶 " .. player.Name .. " гавкнул!")
-    end
+    showBarkBubble(player.Character)
+    playSoundAt(player.Character, SOUNDS.Bark, 1, 0.9)
 end)
 
-Players.PlayerAdded:Connect(hookPlayer)
-for _, pl in pairs(Players:GetPlayers()) do
-    hookPlayer(pl)
+local function watch(player)
+    local function hook(ls)
+        local bones = ls:WaitForChild("Bones", 10)
+        local stage = ls:WaitForChild("Stage", 10)
+        if bones then
+            bones.Changed:Connect(function()
+                playSoundAt(player.Character, SOUNDS.Collect, 1.1, 0.6)
+            end)
+        end
+        if stage then
+            stage.Changed:Connect(function(v)
+                if v == 99 then
+                    for i = 1, 3 do
+                        task.delay((i - 1) * 0.15, function()
+                            playSoundAt(player.Character, SOUNDS.Collect, 0.9 + i * 0.2, 0.7)
+                        end)
+                    end
+                elseif v > 1 then
+                    playSoundAt(player.Character, SOUNDS.Collect, 0.8, 0.7)
+                end
+            end)
+        end
+    end
+    local ls = player:FindFirstChild("leaderstats")
+    if ls then
+        hook(ls)
+    else
+        player.ChildAdded:Connect(function(c)
+            if c.Name == "leaderstats" then hook(c) end
+        end)
+    end
 end
 
+Players.PlayerAdded:Connect(watch)
+for _, pl in pairs(Players:GetPlayers()) do
+    watch(pl)
+end
 print("🔊 Звуки подключены!")
