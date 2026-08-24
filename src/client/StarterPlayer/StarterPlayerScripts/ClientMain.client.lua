@@ -14,6 +14,7 @@ local function bindCharacter(character)
     local camera = workspace.CurrentCamera
     camera.CameraType = Enum.CameraType.Scriptable
 
+    local first = true
     local conn
     conn = RunService.RenderStepped:Connect(function(dt)
         if not character.Parent then
@@ -36,24 +37,24 @@ local function bindCharacter(character)
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then move = move + right end
         if UserInputService:IsKeyDown(Enum.KeyCode.A) then move = move - right end
 
-        if move.Magnitude > 0 then
-            humanoid:Move(move)
-        end
+        -- ВАЖНО: вызываем ВСЕГДА, даже с нулем.
+        -- Это глушит любое фантомное движение без клавиш.
+        humanoid:Move(move)
+
         if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
             humanoid.Jump = true
         end
 
-        -- Камера плавно летит за собакой
-        local desiredPos = (root.CFrame * CFrame.new(0, 4.5, 11)).Position
-        local currentPos = camera.CFrame.Position
-        local newPos
-        if (desiredPos - currentPos).Magnitude > 25 then
-            newPos = desiredPos
+        -- Камера: первый кадр - мгновенно за собакой, дальше - плавно
+        local desired = root.CFrame * CFrame.new(0, 4.5, 11)
+        if first then
+            camera.CFrame = desired
+            first = false
         else
-            newPos = currentPos:Lerp(desiredPos, math.min(1, dt * 8))
+            local newPos = camera.CFrame.Position:Lerp(desired.Position, math.min(1, dt * 8))
+            local aim = root.CFrame * CFrame.new(0, -1.5, 0)
+            camera.CFrame = CFrame.new(newPos, aim.Position)
         end
-        local aim = root.CFrame * CFrame.new(0, -1.5, 0)
-        camera.CFrame = CFrame.new(newPos, aim.Position)
     end)
 end
 
