@@ -31,7 +31,6 @@ local function createDogModel()
     local headWeld = Instance.new("Weld")
     headWeld.Part0 = body
     headWeld.Part1 = head
-    -- Смещаем голову вперед и поворачиваем
     headWeld.C0 = CFrame.new(0, 0.5, -2.2) * CFrame.Angles(0, math.rad(180), 0)
     headWeld.Parent = body
 
@@ -49,7 +48,6 @@ local function createDogModel()
         local legWeld = Instance.new("Weld")
         legWeld.Part0 = body
         legWeld.Part1 = leg
-        -- Позиция лап (две спереди, две сзади)
         local x = (i % 2 == 0) and 0.8 or -0.8
         local z = (i <= 2) and 1.5 or -1.5
         legWeld.C0 = CFrame.new(x, -0.5, z)
@@ -116,7 +114,7 @@ local function setupPlayer(player)
         end
         humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 
-        -- 2. Включаем ходьбу и прыжки (чтобы можно было управлять собакой)
+        -- 2. Включаем ходьбу и прыжки
         humanoid.WalkSpeed = 16
         humanoid.JumpPower = 50
 
@@ -128,12 +126,69 @@ local function setupPlayer(player)
         local weld = Instance.new("Weld")
         weld.Part0 = rootPart
         weld.Part1 = dogBody
-        -- Поворачиваем собаку так, чтобы она смотрела туда же, куда и персонаж
         weld.C0 = CFrame.new(0, 0, 0) * CFrame.Angles(0, math.rad(180), 0) 
         weld.Parent = rootPart
         
         print("🐕 Собака заспавнена для игрока " .. player.Name)
     end)
 end
+
+-- Функция создания зоны спавна
+local function createSpawnZone()
+    local spawnZone = Instance.new("Model")
+    spawnZone.Name = "SpawnZone"
+    spawnZone.Parent = workspace
+
+    -- Основная платформа (трава)
+    local platform = Instance.new("Part")
+    platform.Name = "Platform"
+    platform.Size = Vector3.new(20, 1, 20)
+    platform.Position = Vector3.new(0, 0, 0)
+    platform.BrickColor = BrickColor.new("Bright green")
+    platform.Material = Enum.Material.Grass
+    platform.Anchored = true
+    platform.Parent = spawnZone
+
+    -- Точка спавна (неон)
+    local spawnLocation = Instance.new("SpawnLocation")
+    spawnLocation.Name = "SpawnLocation"
+    spawnLocation.Size = Vector3.new(6, 1, 6)
+    spawnLocation.Position = Vector3.new(0, 1, 0)
+    spawnLocation.BrickColor = BrickColor.new("Bright blue")
+    spawnLocation.Material = Enum.Material.Neon
+    spawnLocation.Anchored = true
+    spawnLocation.Parent = spawnZone
+    
+    -- Стены по краям
+    local walls = {
+        {pos = Vector3.new(0, 2.5, 10), size = Vector3.new(20, 5, 1)},
+        {pos = Vector3.new(0, 2.5, -10), size = Vector3.new(20, 5, 1)},
+        {pos = Vector3.new(10, 2.5, 0), size = Vector3.new(1, 5, 20)},
+        {pos = Vector3.new(-10, 2.5, 0), size = Vector3.new(1, 5, 20)}
+    }
+
+    for _, wallData in pairs(walls) do
+        local wall = Instance.new("Part")
+        wall.Name = "Wall"
+        wall.Size = wallData.size
+        wall.Position = wallData.pos
+        wall.BrickColor = BrickColor.new("Stone grey")
+        wall.Material = Enum.Material.Concrete
+        wall.Anchored = true
+        wall.Parent = spawnZone
+    end
+
+    -- Освещение
+    local light = Instance.new("PointLight")
+    light.Brightness = 2
+    light.Range = 30
+    light.Color = Color3.fromRGB(255, 255, 200)
+    light.Parent = spawnLocation
+    
+    print("🏁 Зона спавна создана!")
+end
+
+-- Запуск функций при старте сервера
+createSpawnZone()
 
 Players.PlayerAdded:Connect(setupPlayer)
