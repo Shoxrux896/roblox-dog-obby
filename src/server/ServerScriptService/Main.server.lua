@@ -1,11 +1,21 @@
 -- src/server/ServerScriptService/Main.server.lua
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
--- Функция создания модели собаки из деталей
+-- 1. Очищаем мир: убираем стандартную серую базу и спавн
+for _, child in pairs(workspace:GetChildren()) do
+    if child:IsA("BasePart") or child:IsA("SpawnLocation") then
+        child:Destroy()
+    end
+end
+
+-- Функция создания модели собаки
 local function createDogModel()
     local dog = Instance.new("Model")
     dog.Name = "DogModel"
+
+    local anim = { legs = {}, tail = nil }
 
     -- Тело
     local body = Instance.new("Part")
@@ -22,44 +32,55 @@ local function createDogModel()
     head.Name = "Head"
     head.Size = Vector3.new(1.5, 1.5, 1.5)
     head.BrickColor = BrickColor.new("Brown")
-    head.Material = Enum.Material.SmoothPlastic
     head.CanCollide = false
     head.Massless = true
     head.Parent = dog
 
-    -- Привязка головы к телу
     local headWeld = Instance.new("Weld")
     headWeld.Part0 = body
     headWeld.Part1 = head
-    headWeld.C0 = CFrame.new(0, 0.5, -2.2) * CFrame.Angles(0, math.rad(180), 0)
+    headWeld.C0 = CFrame.new(0, 0.5, -2.2)
     headWeld.Parent = body
+
+    -- Морда
+    local snout = Instance.new("Part")
+    snout.Name = "Snout"
+    snout.Size = Vector3.new(0.6, 0.5, 0.6)
+    snout.BrickColor = BrickColor.new("Dark orange")
+    snout.CanCollide = false
+    snout.Massless = true
+    snout.Parent = dog
+    local snoutWeld = Instance.new("Weld")
+    snoutWeld.Part0 = head
+    snoutWeld.Part1 = snout
+    snoutWeld.C0 = CFrame.new(0, -0.2, -0.9)
+    snoutWeld.Parent = head
 
     -- Лапы (4 штуки)
     for i = 1, 4 do
         local leg = Instance.new("Part")
         leg.Name = "Leg" .. i
-        leg.Size = Vector3.new(0.5, 1, 0.5)
+        leg.Size = Vector3.new(0.5, 1.2, 0.5)
         leg.BrickColor = BrickColor.new("Dark orange")
-        leg.Material = Enum.Material.SmoothPlastic
         leg.CanCollide = false
         leg.Massless = true
         leg.Parent = dog
-        
+
         local legWeld = Instance.new("Weld")
         legWeld.Part0 = body
         legWeld.Part1 = leg
-        local x = (i % 2 == 0) and 0.8 or -0.8
+        local x = (i % 2 == 0) and 0.7 or -0.7
         local z = (i <= 2) and 1.5 or -1.5
-        legWeld.C0 = CFrame.new(x, -0.5, z)
+        legWeld.C0 = CFrame.new(x, -0.8, z)
         legWeld.Parent = body
+        anim.legs[i] = legWeld
     end
 
     -- Хвост
     local tail = Instance.new("Part")
     tail.Name = "Tail"
-    tail.Size = Vector3.new(0.3, 0.3, 1)
+    tail.Size = Vector3.new(0.3, 0.3, 1.2)
     tail.BrickColor = BrickColor.new("Brown")
-    tail.Material = Enum.Material.SmoothPlastic
     tail.CanCollide = false
     tail.Massless = true
     tail.Parent = dog
@@ -67,35 +88,27 @@ local function createDogModel()
     local tailWeld = Instance.new("Weld")
     tailWeld.Part0 = body
     tailWeld.Part1 = tail
-    tailWeld.C0 = CFrame.new(0, 0.5, 2) * CFrame.Angles(math.rad(45), 0, 0)
+    tailWeld.C0 = CFrame.new(0, 0.4, 2.2) * CFrame.Angles(math.rad(30), 0, 0)
     tailWeld.Parent = body
+    anim.tail = tailWeld
 
     -- Уши
-    local ear1 = Instance.new("Part")
-    ear1.Name = "Ear1"
-    ear1.Size = Vector3.new(0.2, 0.6, 0.2)
-    ear1.BrickColor = BrickColor.new("Dark orange")
-    ear1.Material = Enum.Material.SmoothPlastic
-    ear1.CanCollide = false
-    ear1.Massless = true
-    ear1.Parent = dog
-    
-    local ear1Weld = Instance.new("Weld")
-    ear1Weld.Part0 = head
-    ear1Weld.Part1 = ear1
-    ear1Weld.C0 = CFrame.new(-0.5, 0.8, 0)
-    ear1Weld.Parent = head
+    for _, x in pairs({-0.5, 0.5}) do
+        local ear = Instance.new("Part")
+        ear.Name = "Ear"
+        ear.Size = Vector3.new(0.2, 0.6, 0.2)
+        ear.BrickColor = BrickColor.new("Dark orange")
+        ear.CanCollide = false
+        ear.Massless = true
+        ear.Parent = dog
+        local earWeld = Instance.new("Weld")
+        earWeld.Part0 = head
+        earWeld.Part1 = ear
+        earWeld.C0 = CFrame.new(x, 0.9, 0)
+        earWeld.Parent = head
+    end
 
-    local ear2 = ear1:Clone()
-    ear2.Name = "Ear2"
-    ear2.Parent = dog
-    local ear2Weld = Instance.new("Weld")
-    ear2Weld.Part0 = head
-    ear2Weld.Part1 = ear2
-    ear2Weld.C0 = CFrame.new(0.5, 0.8, 0)
-    ear2Weld.Parent = head
-
-    return dog, body
+    return dog, body, anim
 end
 
 local function setupPlayer(player)
@@ -103,7 +116,7 @@ local function setupPlayer(player)
         local humanoid = character:WaitForChild("Humanoid")
         local rootPart = character:WaitForChild("HumanoidRootPart")
 
-        -- 1. Скрываем стандартного персонажа
+        -- Скрываем стандартного персонажа
         for _, part in pairs(character:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.Transparency = 1
@@ -114,21 +127,42 @@ local function setupPlayer(player)
         end
         humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 
-        -- 2. Включаем ходьбу и прыжки
+        -- Включаем движение
         humanoid.WalkSpeed = 16
         humanoid.JumpPower = 50
+        -- Опускаем камеру ниже, ближе к собаке
+        humanoid.CameraOffset = Vector3.new(0, -1.5, 0)
 
-        -- 3. Создаем собаку
-        local dogModel, dogBody = createDogModel()
+        -- Создаем собаку
+        local dogModel, dogBody, anim = createDogModel()
         dogModel.Parent = character
 
-        -- 4. Привязываем собаку к невидимому персонажу
+        -- Привязываем собаку к персонажу (без поворота на 180)
         local weld = Instance.new("Weld")
         weld.Part0 = rootPart
         weld.Part1 = dogBody
-        weld.C0 = CFrame.new(0, 0, 0) * CFrame.Angles(0, math.rad(180), 0) 
+        weld.C0 = CFrame.new(0, -2, 0)
         weld.Parent = rootPart
-        
+
+        -- Анимация: виляние хвостом и перебор лапами
+        local conn
+        conn = RunService.Heartbeat:Connect(function()
+            if not character.Parent then
+                conn:Disconnect()
+                return
+            end
+            local t = os.clock()
+            local moving = humanoid.MoveDirection.Magnitude > 0
+            local speed = moving and 12 or 4
+            local amp = moving and 0.6 or 0.1
+
+            for i, legWeld in pairs(anim.legs) do
+                local phase = (i == 1 or i == 4) and 0 or math.pi
+                legWeld.C1 = CFrame.Angles(math.sin(t * speed + phase) * amp, 0, 0)
+            end
+            anim.tail.C1 = CFrame.Angles(0, math.sin(t * 8) * 0.5, 0)
+        end)
+
         print("🐕 Собака заспавнена для игрока " .. player.Name)
     end)
 end
@@ -139,7 +173,6 @@ local function createSpawnZone()
     spawnZone.Name = "SpawnZone"
     spawnZone.Parent = workspace
 
-    -- Основная платформа (трава)
     local platform = Instance.new("Part")
     platform.Name = "Platform"
     platform.Size = Vector3.new(20, 1, 20)
@@ -149,7 +182,6 @@ local function createSpawnZone()
     platform.Anchored = true
     platform.Parent = spawnZone
 
-    -- Точка спавна (неон)
     local spawnLocation = Instance.new("SpawnLocation")
     spawnLocation.Name = "SpawnLocation"
     spawnLocation.Size = Vector3.new(6, 1, 6)
@@ -158,8 +190,7 @@ local function createSpawnZone()
     spawnLocation.Material = Enum.Material.Neon
     spawnLocation.Anchored = true
     spawnLocation.Parent = spawnZone
-    
-    -- Стены по краям
+
     local walls = {
         {pos = Vector3.new(0, 2.5, 10), size = Vector3.new(20, 5, 1)},
         {pos = Vector3.new(0, 2.5, -10), size = Vector3.new(20, 5, 1)},
@@ -178,17 +209,17 @@ local function createSpawnZone()
         wall.Parent = spawnZone
     end
 
-    -- Освещение
     local light = Instance.new("PointLight")
     light.Brightness = 2
     light.Range = 30
     light.Color = Color3.fromRGB(255, 255, 200)
     light.Parent = spawnLocation
-    
+
     print("🏁 Зона спавна создана!")
 end
 
--- Запуск функций при старте сервера
 createSpawnZone()
-
 Players.PlayerAdded:Connect(setupPlayer)
+for _, pl in pairs(Players:GetPlayers()) do
+    setupPlayer(pl)
+end
