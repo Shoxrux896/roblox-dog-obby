@@ -3,9 +3,11 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
--- 1. Очищаем мир: убираем стандартную серую базу и спавн
+local SPAWN_POINT = CFrame.new(0, 6, 0)
+
+-- Убираем только стандартную точку спавна (пол оставляем как страховку)
 for _, child in pairs(workspace:GetChildren()) do
-    if child:IsA("BasePart") or child:IsA("SpawnLocation") then
+    if child:IsA("SpawnLocation") then
         child:Destroy()
     end
 end
@@ -14,10 +16,8 @@ end
 local function createDogModel()
     local dog = Instance.new("Model")
     dog.Name = "DogModel"
-
     local anim = { legs = {}, tail = nil }
 
-    -- Тело
     local body = Instance.new("Part")
     body.Name = "Body"
     body.Size = Vector3.new(2, 1, 4)
@@ -27,7 +27,6 @@ local function createDogModel()
     body.Massless = true
     body.Parent = dog
 
-    -- Голова
     local head = Instance.new("Part")
     head.Name = "Head"
     head.Size = Vector3.new(1.5, 1.5, 1.5)
@@ -42,7 +41,6 @@ local function createDogModel()
     headWeld.C0 = CFrame.new(0, 0.5, -2.2)
     headWeld.Parent = body
 
-    -- Морда
     local snout = Instance.new("Part")
     snout.Name = "Snout"
     snout.Size = Vector3.new(0.6, 0.5, 0.6)
@@ -56,7 +54,6 @@ local function createDogModel()
     snoutWeld.C0 = CFrame.new(0, -0.2, -0.9)
     snoutWeld.Parent = head
 
-    -- Лапы (4 штуки)
     for i = 1, 4 do
         local leg = Instance.new("Part")
         leg.Name = "Leg" .. i
@@ -76,7 +73,6 @@ local function createDogModel()
         anim.legs[i] = legWeld
     end
 
-    -- Хвост
     local tail = Instance.new("Part")
     tail.Name = "Tail"
     tail.Size = Vector3.new(0.3, 0.3, 1.2)
@@ -92,7 +88,6 @@ local function createDogModel()
     tailWeld.Parent = body
     anim.tail = tailWeld
 
-    -- Уши
     for _, x in pairs({-0.5, 0.5}) do
         local ear = Instance.new("Part")
         ear.Name = "Ear"
@@ -111,63 +106,72 @@ local function createDogModel()
     return dog, body, anim
 end
 
-local function setupPlayer(player)
-    player.CharacterAdded:Connect(function(character)
-        local humanoid = character:WaitForChild("Humanoid")
-        local rootPart = character:WaitForChild("HumanoidRootPart")
+-- Применение собаки к персонажу
+local function applyToCharacter(character)
+    if character:FindFirstChild("DogModel") then return end
+    local humanoid = character:WaitForChild("Humanoid")
+    local rootPart = character:WaitForChild("HumanoidRootPart")
 
-        -- Скрываем стандартного персонажа
-        for _, part in pairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.Transparency = 1
-                part.CastShadow = false
-            elseif part:IsA("Decal") then
-                part.Transparency = 1
-            end
+    -- Скрываем стандартного персонажа
+    for _, part in pairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.Transparency = 1
+            part.CastShadow = false
+        elseif part:IsA("Decal") then
+            part.Transparency = 1
         end
-        humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+    end
+    humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+    humanoid.WalkSpeed = 16
+    humanoid.JumpPower = 50
 
-        -- Включаем движение
-        humanoid.WalkSpeed = 16
-        humanoid.JumpPower = 50
-        -- Опускаем камеру ниже, ближе к собаке
-        humanoid.CameraOffset = Vector3.new(0, -1.5, 0)
+    -- Создаем и привязываем собаку
+    local dogModel, dogBody, anim = createDogModel()
+    dogModel.Parent = character
 
-        -- Создаем собаку
-        local dogModel, dogBody, anim = createDogModel()
-        dogModel.Parent = character
+    local weld = Instance.new("Weld")
+    weld.Part0 = rootPart
+    weld.Part1 = dogBody
+    weld.C0 = CFrame.new(0, -2, 0)
+    weld.Parent = rootPart
 
-        -- Привязываем собаку к персонажу (без поворота на 180)
-        local weld = Instance.new("Weld")
-        weld.Part0 = rootPart
-        weld.Part1 = dogBody
-        weld.C0 = CFrame.new(0, -2, 0)
-        weld.Parent = rootPart
+    -- Анимация + спасение от падения
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        if not character.Parent then
+            conn:Disconnect()
+            return
+        end
 
-        -- Анимация: виляние хвостом и перебор лапами
-        local conn
-        conn = RunService.Heartbeat:Connect(function()
-            if not character.Parent then
-                conn:Disconnect()
-                return
-            end
-            local t = os.clock()
-            local moving = humanoid.MoveDirection.Magnitude > 0
-            local speed = moving and 12 or 4
-            local amp = moving and 0.6 or 0.1
+        -- Если упали ниже платформы - телепорт на спавн
+        if rootPart.Position.Y < 2.5 then
+            rootPart.CFrame = SPAWN_POINT
+        end
 
-            for i, legWeld in pairs(anim.legs) do
-                local phase = (i == 1 or i == 4) and 0 or math.pi
-                legWeld.C1 = CFrame.Angles(math.sin(t * speed + phase) * amp, 0, 0)
-            end
-            anim.tail.C1 = CFrame.Angles(0, math.sin(t * 8) * 0.5, 0)
-        end)
+        local t = os.clock()
+        local moving = humanoid.MoveDirection.Magnitude > 0
+        local speed = moving and 12 or 4
+        local amp = moving and 0.6 or 0.1
 
-        print("🐕 Собака заспавнена для игрока " .. player.Name)
+        for i, legWeld in pairs(anim.legs) do
+            local phase = (i == 1 or i == 4) and 0 or math.pi
+            legWeld.C1 = CFrame.Angles(math.sin(t * speed + phase) * amp, 0, 0)
+        end
+        anim.tail.C1 = CFrame.Angles(0, math.sin(t * 8) * 0.5, 0)
     end)
+
+    print("🐕 Собака готова для игрока!")
 end
 
--- Функция создания зоны спавна
+local function setupPlayer(player)
+    player.CharacterAdded:Connect(applyToCharacter)
+    -- Если персонаж уже есть (защита от гонки событий)
+    if player.Character then
+        applyToCharacter(player.Character)
+    end
+end
+
+-- Зона спавна (платформа-остров выше серой базы)
 local function createSpawnZone()
     local spawnZone = Instance.new("Model")
     spawnZone.Name = "SpawnZone"
@@ -176,26 +180,25 @@ local function createSpawnZone()
     local platform = Instance.new("Part")
     platform.Name = "Platform"
     platform.Size = Vector3.new(20, 1, 20)
-    platform.Position = Vector3.new(0, 0, 0)
+    platform.Position = Vector3.new(0, 3, 0)
     platform.BrickColor = BrickColor.new("Bright green")
     platform.Material = Enum.Material.Grass
     platform.Anchored = true
     platform.Parent = spawnZone
 
     local spawnLocation = Instance.new("SpawnLocation")
-    spawnLocation.Name = "SpawnLocation"
     spawnLocation.Size = Vector3.new(6, 1, 6)
-    spawnLocation.Position = Vector3.new(0, 1, 0)
+    spawnLocation.Position = Vector3.new(0, 4, 0)
     spawnLocation.BrickColor = BrickColor.new("Bright blue")
     spawnLocation.Material = Enum.Material.Neon
     spawnLocation.Anchored = true
     spawnLocation.Parent = spawnZone
 
     local walls = {
-        {pos = Vector3.new(0, 2.5, 10), size = Vector3.new(20, 5, 1)},
-        {pos = Vector3.new(0, 2.5, -10), size = Vector3.new(20, 5, 1)},
-        {pos = Vector3.new(10, 2.5, 0), size = Vector3.new(1, 5, 20)},
-        {pos = Vector3.new(-10, 2.5, 0), size = Vector3.new(1, 5, 20)}
+        {pos = Vector3.new(0, 5.5, 10), size = Vector3.new(20, 5, 1)},
+        {pos = Vector3.new(0, 5.5, -10), size = Vector3.new(20, 5, 1)},
+        {pos = Vector3.new(10, 5.5, 0), size = Vector3.new(1, 5, 20)},
+        {pos = Vector3.new(-10, 5.5, 0), size = Vector3.new(1, 5, 20)}
     }
 
     for _, wallData in pairs(walls) do
@@ -208,12 +211,6 @@ local function createSpawnZone()
         wall.Anchored = true
         wall.Parent = spawnZone
     end
-
-    local light = Instance.new("PointLight")
-    light.Brightness = 2
-    light.Range = 30
-    light.Color = Color3.fromRGB(255, 255, 200)
-    light.Parent = spawnLocation
 
     print("🏁 Зона спавна создана!")
 end
